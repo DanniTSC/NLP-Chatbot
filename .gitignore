@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment and local settings
+.env
+.env.*
+
+# Chainlit runtime files
+.files/
+.chainlit/.files/
+.chainlit/.sessions/
+.chainlit/translations/
+
+# Project artifacts generated locally
+database/*.db
+database/*.sqlite
+models/*.pkl
+outputs/*.png
+outputs/*.txt
+outputs/*.csv
+outputs/*.log
+public/conversations.json
+
+# Keep folder placeholders in git
+!database/.gitkeep
+!models/.gitkeep
+!outputs/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Personal local notes
+learnings.md
+
+docs
+
+data/raw/twcs/
+.venv/
+.venv-1/
+__pycache__/
+.ipynb_checkpoints/

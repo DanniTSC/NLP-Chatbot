@@ -1,0 +1,13 @@
+[UI]
+name = "Social Support NLP Chatbot"
+description = "Academic MVP for social media customer support using classic NLP."
+default_theme = "dark"
+layout = "wide"
+cot = "hidden"
+alert_style = "modern"
+custom_css = "/public/stylesheet.css"
+custom_js = "/public/sidebar.js"
+confirm_new_chat = false
+
+[meta]
+generated_by = "2.11.0"

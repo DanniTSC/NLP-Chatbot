@@ -1,0 +1,56 @@
+
+
+ 
+ 
+Academia de Studii Economice, București
+Facultatea de Cibernetică, Statistică și Informatică Economică
+Specializarea Master: Tehnologii informatice pentru ingineria datelor
+ 
+ 
+Social Media Chatbot
+ 
+Domeniu: Tehnici pentru procesarea limbajului natural si analiza rețelelor sociale
+ 
+Anul de studiu: 1
+Grupa: 1121
+Numele profesorilor coordonatori: prof. univ. dr. Dârdală Adriana Elena
+Autori: Teleșpan Claudia, Tașcu Daniel, Petcu Adrian
+ 
+ 
+1. COMPOZIȚIA ECHIPEI
+1.	Teleșpan Claudia
+2.	Tașcu Daniel 
+3.	Petcu Adrian 
+2. TEMA PROIECTULUI
+Tema nr. 3 Social Media Chatbot
+3. DESCRIEREA PROIECTULUI:
+Scopul proiectului este dezvoltarea unui agent conversațional destinat activităților de customer support pe platforme de social media, precum Twitter/Facebook, capabil să înțeleagă mesajele utilizatorilor, să identifice intenția acestora și să genereze răspunsuri adecvate într-un mod automat sau semi-automat. Proiectul urmărește utilizarea tehnicilor de procesare a limbajului natural pentru clasificarea solicitărilor și integrarea unui model de tip GPT pentru generarea de răspunsuri coerente, relevante și adaptate contextului conversațional. 
+4. PUBLICUL ȚINTĂ
+Publicul țintă este reprezentat de:
+1. companii, branduri sau organizații care utilizează rețelele sociale pentru a interacționa cu clienții și care au nevoie de un sistem automatizat de preluare și gestionare a întrebărilor, reclamațiilor sau solicitărilor frecvente venite din partea utilizatorilor.
+ 2. utilizatorul de social media care interacționeaza cu aceste platforme si are de raportat o problema
+5. OBIECTIVELE PRINCIPALE ALE PROIECTULUI
+Principalele obiective ale proiectului sunt:
+•	colectarea și preprocesarea unui set de mesaje/conversații de tip customer support din social media; 
+•	identificarea și definirea principalelor tipuri de intenții ale utilizatorilor; 
+•	dezvoltarea unui modul de intent classification pentru încadrarea automată a mesajelor; 
+•	integrarea unui model de tip GPT pentru generarea răspunsurilor; 
+•	asigurarea unei interacțiuni cât mai naturale și relevante cu utilizatorul; 
+•	evaluarea performanței sistemului din punctul de vedere al corectitudinii clasificării și al calității răspunsurilor generate; 
+•	realizarea unui prototip funcțional care să simuleze utilizarea chatbotului într-un scenariu real de customer support.
+6. PRINCIPALELE TEHNICI FOLOSITE
+Proiectul se bazează pe o combinație de tehnici specifice procesării limbajului natural și analizei textelor din social media:
+6.1. Colectarea datelor
+Datele vor consta în mesaje, comentarii sau întrebări formulate de utilizatori în contextul interacțiunii cu pagini de suport/clienți din social media. Acestea pot proveni din surse publice, dataseturi existente sau exemple construite pentru testare.
+6.2. Preprocesarea textului
+Textele colectate vor fi curățate și normalizate prin eliminarea zgomotului specific rețelelor sociale, cum ar fi simboluri inutile, caractere speciale, linkuri sau abrevieri. De asemenea, se pot aplica tehnici precum tokenizare, lowercasing și eliminarea cuvintelor nerelevante.
+6.3. Clasificarea intențiilor
+Pentru identificarea scopului fiecărui mesaj se va utiliza un modul de intent classification, care va încadra solicitările în categorii precum: cerere de informații, reclamație, solicitare suport, întrebare despre produse/servicii, feedback etc.
+6.4. Generarea răspunsurilor
+Pe baza intenției identificate și a contextului conversațional, sistemul va genera răspunsuri folosind un model de tip GPT, capabil să formuleze mesaje clare, coerente și adecvate situației prezentate de utilizator.
+6.5. Analiza contextului conversațional
+Pentru a crește relevanța răspunsurilor, se va ține cont de contextul interacțiunii și de istoricul mesajelor, astfel încât chatbotul să poată răspunde mai natural și mai precis.
+6.6. Evaluarea sistemului
+Performanța proiectului va fi analizată atât din perspectiva clasificării intențiilor, cât și din perspectiva calității răspunsurilor generate, utilizând metrici relevante și exemple de test.
+ 
+

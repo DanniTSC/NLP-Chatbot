@@ -1,0 +1,6 @@
+chainlit
+scikit-learn
+pandas
+numpy
+joblib
+anyio==4.12.0
