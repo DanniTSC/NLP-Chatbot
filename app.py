@@ -20,7 +20,6 @@ from src.conversation_memory import get_all_sessions
 from src.conversation_memory import init_database
 from src.conversation_memory import load_recent_interactions
 from src.conversation_memory import load_session_interactions
-from src.conversation_memory import resolve_intent_with_context
 from src.conversation_memory import resolve_session_id
 from src.conversation_memory import save_interaction
 from src.demo_data import seed_demo_conversations
@@ -29,6 +28,7 @@ from src.response_generator import build_response
 from src.sentiment import analyze_sentiment
 from src.urgency import detect_urgency
 from src.preprocessing import clean_text
+from src.conversation_state import ConversationState
 
 # Import logging for NLP pipeline visibility
 import logging
@@ -85,98 +85,49 @@ async def run_nlp_pipeline(
     user_message: str,
     session_id: str,
 ) -> dict[str, Any]:
-    """
-    Execute the complete NLP chatbot workflow.
-    
-    This pipeline processes customer support messages through the following stages:
-    
-    1. TEXT PREPROCESSING: Clean and normalize the input text
-    2. INTENT CLASSIFICATION: Determine what the customer wants (delivery, refund, etc.)
-    3. SENTIMENT ANALYSIS: Detect emotional tone (positive, negative, neutral)
-    4. URGENCY DETECTION: Assess how urgent the issue is (low, medium, high)
-    5. CONVERSATION CONTEXT: Use previous messages to refine classification
-    6. RESPONSE GENERATION: Build an appropriate support response
-    7. MEMORY SAVE: Store the interaction for future context
-    
-    Args:
-        user_message: Raw customer message from the Chainlit UI
-        session_id: Unique identifier for this conversation thread
-        
-    Returns:
-        Dictionary containing all NLP results and the generated response
-    """
-    
-    # ========== STEP 1: TEXT PREPROCESSING ==========
-    # Clean the raw text by removing URLs, mentions, special characters, etc.
+    """Execute the complete NLP pipeline."""
+
+    # STEP 1: Preprocessing
     cleaned_text = clean_text(user_message)
-    logger.info(f"[PREPROCESSING] Original: {user_message[:60]}...")
-    logger.info(f"[PREPROCESSING] Cleaned:  {cleaned_text[:60]}...")
-    
-    # ========== STEP 2: LOAD CONVERSATION CONTEXT ==========
-    # Retrieve recent conversation history to understand context
+    logger.info(f"[PREPROCESSING] {user_message[:60]} -> {cleaned_text[:60]}")
+
+    # STEP 2: Load conversation context
     conversation_history = load_recent_interactions(str(session_id))
-    logger.info(f"[CONTEXT] Loaded {len(conversation_history)} recent interactions")
-    
-    # ========== STEP 3: INTENT CLASSIFICATION ==========
-    # Classify what the customer's request is about
+    logger.info(f"[CONTEXT] {len(conversation_history)} turns loaded")
+
+    # STEP 3: Intent classification (raw)
     intent_result = classify_intent(cleaned_text)
-    logger.info(
-        f"[INTENT] Detected: {intent_result['intent']} "
-        f"({_format_percent(intent_result['confidence'])})"
-    )
-    
-    # ========== STEP 4: REFINE INTENT WITH CONTEXT ==========
-    # Use conversation history to improve classification accuracy
-    intent_result = resolve_intent_with_context(
-        intent_result,
-        cleaned_text,
-        conversation_history,
-    )
-    logger.info(f"[INTENT_REFINED] Final: {intent_result['intent']}")
-    
-    # ========== STEP 5: SENTIMENT ANALYSIS ==========
-    # Detect the emotional tone of the message
+    logger.info(f"[INTENT] raw={intent_result['intent']} ({intent_result['confidence']:.0%})")
+
+    # STEP 4: Sentiment + Urgency
     sentiment_result = analyze_sentiment(cleaned_text)
-    logger.info(
-        f"[SENTIMENT] Tone: {sentiment_result['sentiment']} "
-        f"(score: {sentiment_result['score']})"
-    )
-    
-    # ========== STEP 6: URGENCY DETECTION ==========
-    # Assess how urgent or time-sensitive the issue is
     urgency_result = detect_urgency(cleaned_text)
-    logger.info(
-        f"[URGENCY] Level: {urgency_result['urgency']} "
-        f"(score: {urgency_result['score']})"
-    )
-    
-    # ========== STEP 7: RESPONSE GENERATION ==========
-    # Generate an appropriate support response based on all signals
+
+    # STEP 5: Build response
+    # ConversationState din build_response corecteaza intentul intern.
+    # Returnam si intentul corectat ca sa il salvam corect in DB.
     bot_response = build_response(
-        intent_result,
-        sentiment_result,
-        urgency_result,
+        intent_result, sentiment_result, urgency_result,
         conversation_history=conversation_history,
-        user_message=cleaned_text,
+        user_message=user_message,
     )
-    logger.info(f"[RESPONSE] Generated: {bot_response[:60]}...")
-    
-    # ========== STEP 8: PREPARE OUTPUT ==========
-    # Package all results for display and storage
-    pipeline_results = {
+
+    state = ConversationState(conversation_history, current_message=user_message)
+    if state.should_force_keep_intent(intent_result["intent"]):
+        intent_result = {**intent_result, "intent": state.current_intent}
+
+    logger.info(f"[INTENT] corrected={intent_result['intent']}")
+    logger.info(f"[RESPONSE] {bot_response[:80]}")
+
+    return {
         "user_message": user_message,
         "cleaned_text": cleaned_text,
-        "intent_result": intent_result,
+        "intent_result": intent_result,   # <-- intentul corectat, nu raw
         "sentiment_result": sentiment_result,
         "urgency_result": urgency_result,
         "bot_response": bot_response,
         "session_id": session_id,
     }
-    
-    logger.info("[PIPELINE] Completed successfully")
-    
-    return pipeline_results
-
 
 def _current_chainlit_thread_id() -> str:
     """Use Chainlit's thread id when available so saved sessions are stable."""
