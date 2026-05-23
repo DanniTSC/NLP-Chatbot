@@ -28,6 +28,17 @@ from src.intent_classifier import classify_intent
 from src.response_generator import build_response
 from src.sentiment import analyze_sentiment
 from src.urgency import detect_urgency
+from src.preprocessing import clean_text
+
+# Import logging for NLP pipeline visibility
+import logging
+
+# Configure logging for the NLP pipeline
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+
 
 MAX_REPLAY_TURNS = 80
 CHAINLIT_SESSION_COOKIE = "X-Chainlit-Session-id"
@@ -68,6 +79,103 @@ def build_metadata_block(
         f"| Urgency | `{urgency_result['urgency']}` "
         f"(`{urgency_result['score']}`) |\n"
     )
+
+
+async def run_nlp_pipeline(
+    user_message: str,
+    session_id: str,
+) -> dict[str, Any]:
+    """
+    Execute the complete NLP chatbot workflow.
+    
+    This pipeline processes customer support messages through the following stages:
+    
+    1. TEXT PREPROCESSING: Clean and normalize the input text
+    2. INTENT CLASSIFICATION: Determine what the customer wants (delivery, refund, etc.)
+    3. SENTIMENT ANALYSIS: Detect emotional tone (positive, negative, neutral)
+    4. URGENCY DETECTION: Assess how urgent the issue is (low, medium, high)
+    5. CONVERSATION CONTEXT: Use previous messages to refine classification
+    6. RESPONSE GENERATION: Build an appropriate support response
+    7. MEMORY SAVE: Store the interaction for future context
+    
+    Args:
+        user_message: Raw customer message from the Chainlit UI
+        session_id: Unique identifier for this conversation thread
+        
+    Returns:
+        Dictionary containing all NLP results and the generated response
+    """
+    
+    # ========== STEP 1: TEXT PREPROCESSING ==========
+    # Clean the raw text by removing URLs, mentions, special characters, etc.
+    cleaned_text = clean_text(user_message)
+    logger.info(f"[PREPROCESSING] Original: {user_message[:60]}...")
+    logger.info(f"[PREPROCESSING] Cleaned:  {cleaned_text[:60]}...")
+    
+    # ========== STEP 2: LOAD CONVERSATION CONTEXT ==========
+    # Retrieve recent conversation history to understand context
+    conversation_history = load_recent_interactions(str(session_id))
+    logger.info(f"[CONTEXT] Loaded {len(conversation_history)} recent interactions")
+    
+    # ========== STEP 3: INTENT CLASSIFICATION ==========
+    # Classify what the customer's request is about
+    intent_result = classify_intent(cleaned_text)
+    logger.info(
+        f"[INTENT] Detected: {intent_result['intent']} "
+        f"({_format_percent(intent_result['confidence'])})"
+    )
+    
+    # ========== STEP 4: REFINE INTENT WITH CONTEXT ==========
+    # Use conversation history to improve classification accuracy
+    intent_result = resolve_intent_with_context(
+        intent_result,
+        cleaned_text,
+        conversation_history,
+    )
+    logger.info(f"[INTENT_REFINED] Final: {intent_result['intent']}")
+    
+    # ========== STEP 5: SENTIMENT ANALYSIS ==========
+    # Detect the emotional tone of the message
+    sentiment_result = analyze_sentiment(cleaned_text)
+    logger.info(
+        f"[SENTIMENT] Tone: {sentiment_result['sentiment']} "
+        f"(score: {sentiment_result['score']})"
+    )
+    
+    # ========== STEP 6: URGENCY DETECTION ==========
+    # Assess how urgent or time-sensitive the issue is
+    urgency_result = detect_urgency(cleaned_text)
+    logger.info(
+        f"[URGENCY] Level: {urgency_result['urgency']} "
+        f"(score: {urgency_result['score']})"
+    )
+    
+    # ========== STEP 7: RESPONSE GENERATION ==========
+    # Generate an appropriate support response based on all signals
+    bot_response = build_response(
+        intent_result,
+        sentiment_result,
+        urgency_result,
+        conversation_history=conversation_history,
+        user_message=cleaned_text,
+    )
+    logger.info(f"[RESPONSE] Generated: {bot_response[:60]}...")
+    
+    # ========== STEP 8: PREPARE OUTPUT ==========
+    # Package all results for display and storage
+    pipeline_results = {
+        "user_message": user_message,
+        "cleaned_text": cleaned_text,
+        "intent_result": intent_result,
+        "sentiment_result": sentiment_result,
+        "urgency_result": urgency_result,
+        "bot_response": bot_response,
+        "session_id": session_id,
+    }
+    
+    logger.info("[PIPELINE] Completed successfully")
+    
+    return pipeline_results
 
 
 def _current_chainlit_thread_id() -> str:
@@ -267,70 +375,117 @@ async def _handle_history_command(message: cl.Message) -> bool:
 
 @cl.on_chat_start
 async def on_chat_start() -> None:
-    """Initialize a Chainlit chat session."""
+    """
+    Initialize a new Chainlit chat session.
+    
+    This handler:
+    1. Sets up the SQLite conversation database
+    2. Seeds demo conversations for testing
+    3. Initializes the session
+    4. Sends a welcome message
+    5. Displays recent conversations
+    """
+    logger.info("\n" + "="*70)
+    logger.info("[STARTUP] Initializing new chat session")
+    logger.info("="*70)
+    
+    # Initialize the SQLite database for conversation memory
     init_database()
-    seed_demo_conversations()
+    logger.info("[DB] Database initialized")
+    
+    # Seed demo conversations (for development/testing)
+    demo_count = seed_demo_conversations()
+    logger.info(f"[DEMO] Seeded {demo_count} demo conversations")
+    
+    # Export conversation history for the sidebar
     export_history_snapshot()
+    logger.info("[EXPORT] History snapshot exported")
 
+    # Initialize session tracking
     session_id = _current_chainlit_thread_id()
     cl.user_session.set("session_id", session_id)
     cl.user_session.set("message_count", 0)
+    logger.info(f"[SESSION] New session ID: {session_id}")
 
+    # Build and send welcome message
     welcome_content = (
         f"**{APP_NAME}**\n\n"
         f"{APP_DESCRIPTION}\n\n"
-        "Send a customer support message, for example: "
-        "`My order never arrived`, `I want a refund`, or "
-        "`This is unacceptable, I need help immediately`.\n\n"
-        "The left sidebar shows saved conversations from SQLite. "
-        "Click one to load that conversation in this chat, or use "
-        "`/open <session_id>` to continue one with context."
+        "### How to Use\n\n"
+        "Send a customer support message, for example:\n"
+        "- `My order never arrived`\n"
+        "- `I want a refund`\n"
+        "- `This is unacceptable, I need help immediately`\n\n"
+        "The chatbot will:\n"
+        "1. **Clean** your message (remove URLs, mentions, etc.)\n"
+        "2. **Classify** your intent (what you need help with)\n"
+        "3. **Analyze** your sentiment (happy, frustrated, etc.)\n"
+        "4. **Detect** urgency (how time-sensitive it is)\n"
+        "5. **Generate** an appropriate response\n\n"
+        "---\n\n"
+        "💾 **Saved Conversations**: The left sidebar shows past conversations. "
+        "Click one to load it, or use `/open <session_id>` to continue with context.\n\n"
+        "📝 **Commands**: Use `/history` to list all sessions or `/new` to start fresh."
     )
 
     all_sessions = get_all_sessions(limit=5)
     if all_sessions:
         welcome_content += (
             "\n\n---\n\n"
-            "**Recent conversations**\n\n"
+            "### Recent Conversations\n\n"
             + format_sessions_for_markdown(all_sessions)
         )
 
     await cl.Message(content=welcome_content).send()
+    logger.info("[STARTUP] Chat session ready\n" + "="*70 + "\n")
 
 
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
-    """Run the MVP NLP pipeline for each user message."""
+    """
+    Handle incoming user messages through the complete NLP pipeline.
+    
+    This async handler:
+    1. Extracts the user message from Chainlit
+    2. Checks for special commands (like /history)
+    3. Runs the NLP pipeline
+    4. Sends the response back to the UI
+    5. Saves the interaction to the database
+    """
     user_message = message.content.strip()
+    
+    # Handle special history commands without running the NLP pipeline
     if await _handle_history_command(message):
         return
 
+    # ========== Initialize Session ==========
     session_id = cl.user_session.get("session_id")
     if session_id is None:
         session_id = _current_chainlit_thread_id()
         cl.user_session.set("session_id", session_id)
 
+    # Update message count for this session
     message_count = cl.user_session.get("message_count") or 0
     cl.user_session.set("message_count", message_count + 1)
+    
+    logger.info(f"\n{'='*70}")
+    logger.info(f"[SESSION] ID: {session_id}")
+    logger.info(f"[SESSION] Message #{message_count + 1}")
+    logger.info(f"{'='*70}")
 
-    conversation_history = load_recent_interactions(str(session_id))
-    intent_result = classify_intent(user_message)
-    intent_result = resolve_intent_with_context(
-        intent_result,
-        user_message,
-        conversation_history,
-    )
-    sentiment_result = analyze_sentiment(user_message)
-    urgency_result = detect_urgency(user_message)
+    # ========== RUN NLP PIPELINE ==========
+    # Process the message through all NLP modules
+    pipeline_results = await run_nlp_pipeline(user_message, str(session_id))
+    
+    # Extract results
+    intent_result = pipeline_results["intent_result"]
+    sentiment_result = pipeline_results["sentiment_result"]
+    urgency_result = pipeline_results["urgency_result"]
+    bot_response = pipeline_results["bot_response"]
 
-    response = build_response(
-        intent_result,
-        sentiment_result,
-        urgency_result,
-        conversation_history=conversation_history,
-        user_message=user_message,
-    )
-    message_content = response
+    # ========== BUILD RESPONSE MESSAGE ==========
+    # Combine response with optional NLP metadata
+    message_content = bot_response
     if SHOW_NLP_METADATA:
         message_content += build_metadata_block(
             intent_result,
@@ -338,13 +493,23 @@ async def on_message(message: cl.Message) -> None:
             urgency_result,
         )
 
+    # ========== SEND RESPONSE TO USER ==========
     await cl.Message(content=message_content).send()
+    
+    # ========== SAVE TO CONVERSATION MEMORY ==========
+    # Store the interaction in SQLite for future context and history
     save_interaction(
         session_id=str(session_id),
         user_message=user_message,
-        bot_response=response,
+        bot_response=bot_response,
         intent_result=intent_result,
         sentiment_result=sentiment_result,
         urgency_result=urgency_result,
     )
+    
+    # ========== UPDATE HISTORY SNAPSHOT ==========
+    # Export conversation history for the sidebar
     export_history_snapshot()
+    
+    logger.info(f"[SAVE] Interaction saved to database")
+    logger.info(f"{'='*70}\n")
