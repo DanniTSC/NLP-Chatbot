@@ -3,4 +3,6 @@ scikit-learn
 pandas
 numpy
 joblib
+matplotlib
+ipykernel
 anyio==4.12.0

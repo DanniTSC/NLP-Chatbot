@@ -21,6 +21,10 @@ _ORDER_REFERENCE_RE = re.compile(
     r"\s*(?:number|no)?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{3,})\b",
     re.IGNORECASE,
 )
+_STANDALONE_REFERENCE_RE = re.compile(
+    r"\b((?:ord|ref|case|ticket)-?[a-z0-9-]*\d[a-z0-9-]*)\b",
+    re.IGNORECASE,
+)
 
 _REFUND_REASON_RE = re.compile(
     r"\b(reason|damaged|defective|does not match|wrong item|not as described)\b",
@@ -342,8 +346,11 @@ def find_order_reference(
 
     for message in messages:
         match = _ORDER_REFERENCE_RE.search(message)
-        if match:
+        if match and re.search(r"\d", match.group(1)):
             return match.group(1)
+        standalone_match = _STANDALONE_REFERENCE_RE.search(message)
+        if standalone_match:
+            return standalone_match.group(1)
 
     return None
 

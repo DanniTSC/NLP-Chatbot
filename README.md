@@ -1,6 +1,6 @@
 # Social Support NLP Chatbot
 
-Aplicatie Chainlit pentru customer support pe mesaje de social media. Proiectul detecteaza intentul, sentimentul si urgenta, genereaza raspunsuri pe reguli si salveaza conversatiile in SQLite.
+Aplicatie Chainlit pentru customer support pe mesaje de social media. Proiectul detecteaza intentul, sentimentul si urgenta, poate rescrie raspunsurile cu un model GPT local prin Ollama si salveaza conversatiile in SQLite.
 
 ## Rulare
 
@@ -18,6 +18,31 @@ Sau direct:
 .\run_app.ps1
 ```
 
+## GPT local optional prin Ollama
+
+Aplicatia nu foloseste OpenAI API si nu are nevoie de API key. Pentru cerinta de integrare a unui model de tip GPT, pipeline-ul poate folosi un model local Ollama doar pentru redactarea raspunsului final. Clasificarea intentului, sentimentul, urgenta si memoria conversationala raman controlate de codul existent.
+
+Implicit, GPT-ul local este dezactivat ca aplicatia sa ruleze rapid si fara Ollama. Activeaza-l doar cand ai Ollama instalat si modelul descarcat.
+
+Instalare/rulare model local:
+
+```powershell
+ollama pull llama3.2:3b
+$env:USE_LOCAL_GPT = "true"
+$env:OLLAMA_MODEL = "llama3.2:3b"
+chainlit run app.py
+```
+
+Daca Ollama nu este instalat, nu ruleaza sau modelul lipseste, aplicatia revine automat la raspunsurile pe reguli/template-uri.
+
+Configurari utile:
+
+```powershell
+$env:USE_LOCAL_GPT = "false"        # forteaza fallback-ul pe template-uri
+$env:OLLAMA_BASE_URL = "http://localhost:11434"
+$env:OLLAMA_TIMEOUT_SECONDS = "20"
+```
+
 Exemple de mesaje:
 
 - `My package never arrived`
@@ -29,6 +54,7 @@ Exemple de mesaje:
 
 - SQLite memory in `src/conversation_memory.py`: salveaza conversatiile, incarca istoricul anterior si exporta istoricul pentru sidebar.
 - `response_generator` in `src/response_generator.py`: reguli contextuale pentru clarificare, empatie la mesaje urgente/negative si raspunsuri pe intent.
+- `llm_response_generator` in `src/llm_response_generator.py`: generator optional cu Ollama pentru raspunsuri mai naturale, cu fallback automat pe template-uri.
 - Integrarea pipeline-ului in `app.py`: intent, sentiment, urgency, raspuns, salvare in SQLite si incarcare conversatii vechi.
 - Sidebar cu istoricul conversatiilor in `public/sidebar.js` si `public/stylesheet.css`: conversatiile se deschid in chat-ul principal.
 - Demo conversations in `outputs/example_conversations.md` si seed demo in `src/demo_data.py`.
@@ -49,6 +75,8 @@ Exemple de mesaje:
 - [x] Botul foloseste contextul anterior
 - [x] Daca confidence e mic, cere clarificare
 - [x] Daca mesajul e urgent/negativ, raspunde empatic
+- [x] Poate folosi optional un model GPT local prin Ollama pentru redactarea raspunsului
+- [x] Daca GPT-ul local nu este disponibil, revine automat la template-uri
 - [x] Am demo conversations salvate
 
 
@@ -164,7 +192,7 @@ Urgency: medium/high
 
 Bot: I'm sorry to hear that your order has not arrived. I can help you start a refund or delivery investigation. Could you please provide your order number?
 
-Nu este nevoie de GPT API. Un response generator pe reguli sau template-uri este suficient pentru MVP.
+Nu este nevoie de GPT API. Pentru MVP, response generator-ul pe reguli ramane fallback-ul sigur; pentru cerinta de tip GPT, Ollama poate genera local textul final folosind semnalele NLP deja calculate.
 
 ## MVP realist
 
@@ -202,7 +230,9 @@ model ML
 	↓
 intent + confidence
 	↓
-response generator
+template response plan
+	↓
+local GPT rewrite optional sau template fallback
 ```
 
 ## Structura recomandata a proiectului
@@ -246,4 +276,3 @@ social-media-chatbot/
 └── database/
 		└── chat_history.db
 ```
-

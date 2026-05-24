@@ -20,10 +20,12 @@ from src.conversation_memory import get_all_sessions
 from src.conversation_memory import init_database
 from src.conversation_memory import load_recent_interactions
 from src.conversation_memory import load_session_interactions
+from src.conversation_memory import resolve_intent_with_context
 from src.conversation_memory import resolve_session_id
 from src.conversation_memory import save_interaction
 from src.demo_data import seed_demo_conversations
 from src.intent_classifier import classify_intent
+from src.llm_response_generator import try_generate_local_gpt_response
 from src.response_generator import build_response
 from src.sentiment import analyze_sentiment
 from src.urgency import detect_urgency
@@ -61,6 +63,7 @@ def build_metadata_block(
     intent_result: dict[str, Any],
     sentiment_result: dict[str, Any],
     urgency_result: dict[str, Any],
+    response_source: str,
 ) -> str:
     """Create a compact Markdown block with NLP metadata for the demo."""
     matched_keywords = intent_result.get("matched_keywords") or []
@@ -78,6 +81,7 @@ def build_metadata_block(
         f"(`{sentiment_result['score']}`) |\n"
         f"| Urgency | `{urgency_result['urgency']}` "
         f"(`{urgency_result['score']}`) |\n"
+        f"| Response source | `{response_source}` |\n"
     )
 
 
@@ -99,24 +103,42 @@ async def run_nlp_pipeline(
     intent_result = classify_intent(cleaned_text)
     logger.info(f"[INTENT] raw={intent_result['intent']} ({intent_result['confidence']:.0%})")
 
-    # STEP 4: Sentiment + Urgency
+    # STEP 4: Refine intent with context, then compute sentiment + urgency
+    intent_result = resolve_intent_with_context(
+        intent_result,
+        cleaned_text,
+        conversation_history,
+    )
+
     sentiment_result = analyze_sentiment(cleaned_text)
     urgency_result = detect_urgency(cleaned_text)
-
-    # STEP 5: Build response
-    # ConversationState din build_response corecteaza intentul intern.
-    # Returnam si intentul corectat ca sa il salvam corect in DB.
-    bot_response = build_response(
-        intent_result, sentiment_result, urgency_result,
-        conversation_history=conversation_history,
-        user_message=user_message,
-    )
 
     state = ConversationState(conversation_history, current_message=user_message)
     if state.should_force_keep_intent(intent_result["intent"]):
         intent_result = {**intent_result, "intent": state.current_intent}
 
+    # STEP 5: Build safe template response, then optionally rewrite with local GPT.
+    template_response = build_response(
+        intent_result, sentiment_result, urgency_result,
+        conversation_history=conversation_history,
+        user_message=user_message,
+    )
+    llm_result = await try_generate_local_gpt_response(
+        user_message=user_message,
+        template_response=template_response,
+        intent_result=intent_result,
+        sentiment_result=sentiment_result,
+        urgency_result=urgency_result,
+        conversation_history=conversation_history,
+    )
+    bot_response = str(llm_result["response"])
+    response_source = str(llm_result["source"])
+
     logger.info(f"[INTENT] corrected={intent_result['intent']}")
+    if not llm_result["ok"] and llm_result.get("error"):
+        logger.info(f"[LOCAL_GPT] fallback used: {llm_result['error']}")
+    else:
+        logger.info(f"[LOCAL_GPT] response source={response_source}")
     logger.info(f"[RESPONSE] {bot_response[:80]}")
 
     return {
@@ -126,6 +148,7 @@ async def run_nlp_pipeline(
         "sentiment_result": sentiment_result,
         "urgency_result": urgency_result,
         "bot_response": bot_response,
+        "response_source": response_source,
         "session_id": session_id,
     }
 
@@ -170,7 +193,6 @@ async def _replay_saved_conversation(
         ).send()
         await cl.Message(
             content=str(interaction["bot_response"]),
-            author=APP_NAME,
             type="assistant_message",
         ).send()
 
@@ -372,7 +394,8 @@ async def on_chat_start() -> None:
         "2. **Classify** your intent (what you need help with)\n"
         "3. **Analyze** your sentiment (happy, frustrated, etc.)\n"
         "4. **Detect** urgency (how time-sensitive it is)\n"
-        "5. **Generate** an appropriate response\n\n"
+        "5. **Generate** an appropriate response with local GPT if available, "
+        "otherwise with the safe template fallback\n\n"
         "---\n\n"
         "💾 **Saved Conversations**: The left sidebar shows past conversations. "
         "Click one to load it, or use `/open <session_id>` to continue with context.\n\n"
@@ -433,6 +456,7 @@ async def on_message(message: cl.Message) -> None:
     sentiment_result = pipeline_results["sentiment_result"]
     urgency_result = pipeline_results["urgency_result"]
     bot_response = pipeline_results["bot_response"]
+    response_source = pipeline_results["response_source"]
 
     # ========== BUILD RESPONSE MESSAGE ==========
     # Combine response with optional NLP metadata
@@ -442,6 +466,7 @@ async def on_message(message: cl.Message) -> None:
             intent_result,
             sentiment_result,
             urgency_result,
+            response_source,
         )
 
     # ========== SEND RESPONSE TO USER ==========

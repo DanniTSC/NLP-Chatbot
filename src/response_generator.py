@@ -58,13 +58,8 @@ def build_response(
     urgency_result: dict[str, Any],
     conversation_history: list[dict[str, Any]] | None = None,
     user_message: str = "",
-) -> tuple[str, dict[str, Any]]:
-    """
-    Build a support response with progressive multi-turn conversation logic.
-
-    Returneaza un tuple (response_text, corrected_intent_result) ca sa
-    app.py poata salva intentul corectat in DB, nu cel raw.
-    """
+) -> str:
+    """Build a support response with progressive multi-turn conversation logic."""
     history = conversation_history or []
     intent = str(intent_result["intent"])
     confidence = float(intent_result["confidence"])
@@ -81,9 +76,6 @@ def build_response(
         previous_intent = find_latest_specific_intent(history)
         if previous_intent:
             intent = previous_intent
-
-    # Intent result corectat — il returnam pentru salvare corecta in DB
-    corrected_intent_result = {**intent_result, "intent": intent}
 
     # Construim raspunsul principal
     if confidence < LOW_CONFIDENCE_THRESHOLD and not history:

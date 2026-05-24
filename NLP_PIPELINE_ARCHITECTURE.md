@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chatbot implements a comprehensive 8-stage NLP pipeline that processes customer support messages and generates intelligent responses. All modules are integrated into `app.py` with clear logging at each stage.
+The chatbot implements a comprehensive 8-stage NLP pipeline that processes customer support messages and generates intelligent responses. The existing NLP signals remain the decision layer, while an optional local GPT-style Ollama model can rewrite the final response. If Ollama is unavailable, the app falls back to the template generator.
 
 ---
 
@@ -155,6 +155,26 @@ response = build_response(
 - **Sentiment prefix**: Add empathy if sentiment is negative
 - **Urgency prefix**: Add urgency handling if needed
 - **High urgency boost**: Escalate to high-priority support language
+
+### 6b. **Optional Local GPT Rewrite** (`src/llm_response_generator.py`)
+```python
+from src.llm_response_generator import try_generate_local_gpt_response
+
+llm_result = await try_generate_local_gpt_response(
+    user_message=user_message,
+    template_response=template_response,
+    intent_result=intent_result,
+    sentiment_result=sentiment_result,
+    urgency_result=urgency_result,
+    conversation_history=history,
+)
+# Returns response source: local_gpt: llama3.2:3b or template_fallback
+```
+
+**Hybrid behavior**:
+- Ollama is used only to write the final customer-facing text.
+- The local GPT receives intent, confidence, sentiment, urgency, context, and the safe template response.
+- If Ollama is disabled, unavailable, or times out, the template response is used unchanged.
 
 ---
 
@@ -375,6 +395,9 @@ app.py (Chainlit async handlers)
 APP_NAME = "Social Support NLP Chatbot"
 LOW_CONFIDENCE_THRESHOLD = 0.55  # Threshold for requesting clarification
 SHOW_NLP_METADATA = True  # Display NLP signals in UI
+USE_LOCAL_GPT = False  # Set env USE_LOCAL_GPT=true to enable Ollama
+OLLAMA_MODEL = "llama3.2:3b"
+OLLAMA_BASE_URL = "http://localhost:11434"
 INTENTS = (9 supported intent types)
 AMBIGUOUS_MESSAGES = {"help", "hello", "hi", ...}  # Keywords needing clarification
 ```

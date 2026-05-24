@@ -1,8 +1,9 @@
 # Example Conversations
 
-These examples were generated from the current local pipeline:
+These examples were generated from the current hybrid pipeline:
 mock/real intent classifier facade, sentiment analyzer, urgency detector,
-SQLite-aware context logic, and template-based response generator.
+SQLite-aware context logic, template fallback generator, and optional local
+GPT rewriting through Ollama.
 
 ## Delivery issue
 
@@ -29,6 +30,24 @@ SQLite-aware context logic, and template-based response generator.
 | Confidence | `0.64` |
 | Sentiment | `neutral` |
 | Urgency | `low` |
+
+## Hybrid response source comparison
+
+Same input, same NLP signals, different response source.
+
+**User:** I want a refund, my order never arrived.
+
+**Template fallback response:** I am sorry you are dealing with this. To start a refund request, I will need your order ID.
+
+**Local GPT response (`llama3.2:3b`, expected style):** I am sorry your order has not arrived. I can help start a refund request, but I will need your order number first so the support team can review the case. Please send the order ID and I will guide you through the next step.
+
+| Signal | Value |
+| --- | --- |
+| Intent | `refund_request` |
+| Confidence | `0.87` |
+| Sentiment | `negative` |
+| Urgency | `medium` |
+| Response source | `template_fallback` or `local_gpt: llama3.2:3b` |
 
 ## Payment issue urgent
 

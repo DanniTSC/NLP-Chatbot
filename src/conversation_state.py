@@ -14,6 +14,16 @@ STATEFUL_INTENTS = {
     "payment_issue",
 }
 
+LABELED_REFERENCE_RE = re.compile(
+    r"\b(order|tracking|ticket|reference|ref|case)"
+    r"(?:\s+(?:id|number|no))?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{3,})\b",
+    re.IGNORECASE,
+)
+STANDALONE_REFERENCE_RE = re.compile(
+    r"\b(?:ord|ref|case|ticket)-?[a-z0-9-]*\d[a-z0-9-]*\b",
+    re.IGNORECASE,
+)
+
 LIKELY_MISCLASSIFIED_AS = {
     "general_question",
     "payment_issue",
@@ -72,10 +82,10 @@ class ConversationState:
 
             # Order/tracking ID — prinde: "order #20323", "tracking id is 20323",
             # "my tracking id from my order is 20323", sau orice numar 4+ cifre
-            if re.search(
-                r"\b(order|tracking|ticket|reference|ref|case)[\s\w#:.-]{0,20}?([a-z0-9]{4,})\b",
-                msg_lower,
-            ):
+            reference_match = LABELED_REFERENCE_RE.search(msg_lower)
+            if reference_match and re.search(r"\d", reference_match.group(2)):
+                info["has_order_id"] = True
+            elif STANDALONE_REFERENCE_RE.search(msg_lower):
                 info["has_order_id"] = True
             elif re.search(r"\b\d{4,}\b", msg):
                 # Fallback: numar standalone de 4+ cifre = tracking number
